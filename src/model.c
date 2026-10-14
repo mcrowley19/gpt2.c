@@ -42,11 +42,23 @@ int read_32bit_int(FILE *fp){
     fread(&return_val, sizeof(int), 1, fp);
     return return_val;
 }
+
+void check_parameter(const char* name, float *p, size_t n){
+    double total = 0;
+    for(size_t i = 0; i < n; i++){
+        total = total + p[i];
+    }
+
+    printf("%s %.6f %.6f %.6f\n", name,p[0],p[n-1], total);
+}
+
+
 // In C we do not have a way to structure tensors
 // We just load contiguous blocks of values and then mentally view them as tensors
-float * load_tensor(FILE *fp, Arena *a, size_t n){
+float * load_tensor(FILE *fp, Arena *a, size_t n, const char *name){
     float *p = arena_alloc(a, n*sizeof(float));
     fread(p, sizeof(float),n,fp);
+    check_parameter(name, p, n);
     return p;
 }
 
@@ -73,12 +85,30 @@ int main(void){
     model.cfg.d_ff = read_32bit_int(fp);
     Arena a;
     arena_init(&a, 600 * 1024 * 1024);
-    // Token embedding
-    model.wte = load_tensor(fp, &a, model.cfg.vocab * model.cfg.d_model);
-    // Positional embedding
-    model.wpe =  load_tensor(fp, &a, model.cfg.context * model.cfg.d_model);
+    // Token embedding matrix
+    model.wte = load_tensor(fp, &a, model.cfg.vocab * model.cfg.d_model, "wte");
+    // Positional embedding matrix
+    model.wpe =  load_tensor(fp, &a, model.cfg.context * model.cfg.d_model, "wpe");
+    int d = model.cfg.d_model;
+    for(int i = 0; i < model.cfg.n_layers; i++){
+        Block new_block;
+        new_block.ln_1_w = load_tensor(fp, &a, d, "ln_1_w");
+        new_block.ln_1_bias = load_tensor(fp, &a,d, "ln_1_bias");
+        new_block.attn_weight = load_tensor(fp, &a,3 * d * d, "attn_weight");
+        new_block.attn_bias = load_tensor(fp, &a,3 * d, "attn_bias");
+        new_block.attn_proj_weight = load_tensor(fp, &a,d * d, "attn_proj_weight");
+        new_block.attn_proj_bias = load_tensor(fp, &a,d, "attn_proj_bias");
+        new_block.ln_2_weight = load_tensor(fp, &a,d, "ln_2_weight");
+        new_block.ln_2_bias = load_tensor(fp, &a,d, "ln_2_bias");
+        new_block.fc_weight = load_tensor(fp, &a,model.cfg.d_ff * d, "fc_weight");
+        new_block.fc_bias = load_tensor(fp, &a,model.cfg.d_ff, "fc_bias");
+        new_block.mlp_proj_weight = load_tensor(fp, &a,d * model.cfg.d_ff, "mlp_proj_weight");
+        new_block.mlp_proj_bias = load_tensor(fp, &a,d, "mlp_proj_bias");
+        model.blocks[i] = new_block;
+    }
 
-    printf("%f\n", model.wte[0]);
+    model.ln_f_weight = load_tensor(fp, &a, d, "ln_f_weight");
+    model.ln_f_bias =  load_tensor(fp, &a, d, "ln_f_bias");
     arena_free(&a);
     fclose(fp);
     return 0;

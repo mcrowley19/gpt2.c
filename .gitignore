@@ -1,1 +1,5 @@
 gpt2.bin
+weights_verification.txt
+c_check.txt
+test_arena
+test_arena.o
