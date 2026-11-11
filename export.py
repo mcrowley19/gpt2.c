@@ -6,6 +6,6 @@ with open("gpt2.bin","wb") as f:
     f.write(struct.pack("<7i", 1, 12, 12, 768, 50257, 1024, 3072))
 
     for name, p in model.named_parameters():
-        if len(p.shape)  == 2:
+        if len(p.shape)  == 2 and name.startswith("transformer.h"):
             p = p.T
         f.write(p.detach().numpy().astype("float32").tobytes())
